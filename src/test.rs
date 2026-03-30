@@ -5,11 +5,13 @@ mod tests {
         token, Address, Env, String,
     };
 
+    // Note: We use the generated client and the enums/errors from our crate
     use crate::{BloodLinkContract, BloodLinkContractClient, Error, RequestStatus};
 
     const REWARD_HLTH: i128 = 50_000_000; // 50 HLTH tokens in stroops
 
     fn create_token(env: &Env, admin: &Address, recipient: &Address, amount: i128) -> Address {
+        // Updated to use the standard asset contract registration
         let token_id = env.register_stellar_asset_contract_v2(admin.clone());
         let token_admin = token::StellarAssetClient::new(env, &token_id.address());
         token_admin.mint(recipient, &amount);
@@ -47,38 +49,30 @@ mod tests {
         (env, admin, hospital, donor, contract_id, hlth_token, client)
     }
 
-    // -----------------------------------------------------------------------
-    // Test 1 — Happy path
-    // Hospital posts request → donor responds → BHW confirms → HLTH reward paid
-    // -----------------------------------------------------------------------
     #[test]
     fn test_full_donation_flow_happy_path() {
         let (env, admin, hospital, donor, _contract_id, hlth_token, client) = setup();
 
         let deadline = env.ledger().timestamp() + 3600; // 1 hour from now
 
-        // Hospital posts emergency O+ request
         let request_id = client.post_request(
             &hospital,
             &String::from_str(&env, "O+"),
             &2u32,
             &String::from_str(&env, "14.5995,120.9842"),
             &deadline,
-        );
+        ).unwrap(); // post_request returns Result<u64, Error>
+
         assert_eq!(request_id, 1u64);
 
-        // Donor responds with a mock claimable balance ID
         let cb_id = String::from_str(&env, "claimable_balance_mock_001");
-        client.respond_to_request(&donor, &request_id, &cb_id);
+        client.respond_to_request(&donor, &request_id, &cb_id).unwrap();
 
-        // Check donor balance before confirmation
         let token_client = token::Client::new(&env, &hlth_token);
         let balance_before = token_client.balance(&donor);
 
-        // BHW + admin co-sign confirmation
-        client.confirm_donation(&admin, &donor, &request_id);
+        client.confirm_donation(&admin, &donor, &request_id).unwrap();
 
-        // Donor should have received exactly REWARD_HLTH
         let balance_after = token_client.balance(&donor);
         assert_eq!(
             balance_after - balance_before,
@@ -86,20 +80,14 @@ mod tests {
             "donor should receive exactly the HLTH reward"
         );
 
-        // Verify the response record shows confirmed = true
         let response = client.get_response(&request_id, &donor);
         assert!(response.confirmed, "response should be marked confirmed");
 
-        // Verify request still Open (only 1 of 2 units fulfilled)
         let request = client.get_request(&request_id);
         assert_eq!(request.units_fulfilled, 1u32);
         assert_eq!(request.status, RequestStatus::Open);
     }
 
-    // -----------------------------------------------------------------------
-    // Test 2 — Edge case
-    // A duplicate donor response to the same request must be rejected.
-    // -----------------------------------------------------------------------
     #[test]
     fn test_duplicate_donor_response_rejected() {
         let (env, _admin, hospital, donor, _contract_id, _hlth_token, client) = setup();
@@ -112,14 +100,13 @@ mod tests {
             &1u32,
             &String::from_str(&env, "10.3157,123.8854"),
             &deadline,
-        );
+        ).unwrap();
 
         let cb_id = String::from_str(&env, "claimable_balance_mock_002");
 
-        // First response — should succeed
-        client.respond_to_request(&donor, &request_id, &cb_id);
+        client.respond_to_request(&donor, &request_id, &cb_id).unwrap();
 
-        // Second response from the same donor — must fail
+        // Using try_ variant to check the error
         let result = client.try_respond_to_request(
             &donor,
             &request_id,
@@ -128,7 +115,8 @@ mod tests {
 
         assert!(result.is_err(), "duplicate response should return an error");
 
-        let contract_err = result.err().unwrap().unwrap_optimistic();
+        // FIXED: Renamed unwrap_optimistic to unwrap_optimized
+        let contract_err = result.err().unwrap().unwrap_optimized();
         assert_eq!(
             contract_err,
             Error::DuplicateResponse,
@@ -136,10 +124,6 @@ mod tests {
         );
     }
 
-    // -----------------------------------------------------------------------
-    // Test 3 — State verification
-    // Storage correctly reflects request metadata and status after posting.
-    // -----------------------------------------------------------------------
     #[test]
     fn test_request_storage_state_after_posting() {
         let (env, _admin, hospital, _donor, _contract_id, _hlth_token, client) = setup();
@@ -152,7 +136,7 @@ mod tests {
             &3u32,
             &String::from_str(&env, "7.0731,125.6128"),
             &deadline,
-        );
+        ).unwrap();
 
         let stored = client.get_request(&request_id);
 
