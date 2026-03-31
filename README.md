@@ -12,6 +12,15 @@ on-chain with GPS and a deadline. Verified donors respond in one tap, earning HL
 tokens held in escrow. A BHW co-signs on-site confirmation, releasing the reward
 automatically. Every match is publicly auditable on any Stellar explorer.
 
+## Deployed Contract
+| Network | Contract ID |
+|---------|-------------|
+| Testnet | `CC3MZKXYMWYY27RPVFCN3PABNAIVJ3GSIIWGO2WAQWP37QIA2FUAIJJG` |
+
+![StellarExpert](docs/stellarexpert.png)
+
+🔍 [View on StellarExpert](https://stellar.expert/explorer/testnet/contract/CC3MZKXYMWYY27RPVFCN3PABNAIVJ3GSIIWGO2WAQWP37QIA2FUAIJJG)
+
 ## Stellar features used
 - Soroban smart contracts (request registry, response, 2-of-2 confirmation, reward)
 - Custom HLTH token (donor reward, redeemable at RHUs)
@@ -44,7 +53,7 @@ stellar contract deploy \
 
 ## Initialize
 ```
-stellar contract invoke --id <CONTRACT_ID> --source my-key --network testnet \
+stellar contract invoke --id CC3MZKXYMWYY27RPVFCN3PABNAIVJ3GSIIWGO2WAQWP37QIA2FUAIJJG --source my-key --network testnet \
   -- initialize \
   --admin <ADMIN_ADDRESS> \
   --hlth_token <HLTH_TOKEN_CONTRACT_ADDRESS> \
@@ -53,7 +62,7 @@ stellar contract invoke --id <CONTRACT_ID> --source my-key --network testnet \
 
 ## Post a blood request
 ```
-stellar contract invoke --id <CONTRACT_ID> --source hospital-key --network testnet \
+stellar contract invoke --id CC3MZKXYMWYY27RPVFCN3PABNAIVJ3GSIIWGO2WAQWP37QIA2FUAIJJG --source hospital-key --network testnet \
   -- post_request \
   --hospital <HOSPITAL_ADDRESS> \
   --blood_type '"O+"' \
@@ -64,7 +73,7 @@ stellar contract invoke --id <CONTRACT_ID> --source hospital-key --network testn
 
 ## Confirm a donation (BHW + admin co-sign)
 ```
-stellar contract invoke --id <CONTRACT_ID> --source admin-key --network testnet \
+stellar contract invoke --id CC3MZKXYMWYY27RPVFCN3PABNAIVJ3GSIIWGO2WAQWP37QIA2FUAIJJG --source admin-key --network testnet \
   -- confirm_donation \
   --admin <ADMIN_ADDRESS> \
   --donor <DONOR_ADDRESS> \
