@@ -1,8 +1,0 @@
-From<(soroban_sdk::xdr::ScErrorType, soroban_sdk::xdr::ScErrorCode)>
-From<soroban_env_common::symbol::SymbolError>
-From<soroban_env_host::builtin_contracts::contract_error::ContractError>
-From<wasmparser::binary_reader::BinaryReaderError>
-TryFromVal<Env, core::result::Result<u64, Error>>
-FromVal<Env, core::result::Result<u64, Error>>
-TryFromVal<Env, core::result::Result<(), Error>>
-FromVal<Env, core::result::Result<(), Error>>

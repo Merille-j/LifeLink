@@ -1,5 +1,5 @@
 [package]
-name = "bloodlink"
+name = "lifelink"
 version = "0.1.0"
 edition = "2021"
 description = "On-chain emergency blood supply matching with HLTH token rewards — built on Stellar Soroban"

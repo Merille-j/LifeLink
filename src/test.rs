@@ -1,17 +1,16 @@
 #[cfg(test)]
 mod tests {
-    use soroban_sdk::{
+    use soroban_sdk::unwrap::UnwrapOptimized;
+use soroban_sdk::{
         testutils::{Address as _, Ledger},
         token, Address, Env, String,
     };
 
-    // Note: We use the generated client and the enums/errors from our crate
-    use crate::{BloodLinkContract, BloodLinkContractClient, Error, RequestStatus};
+    use crate::{LifeLinkContract, LifeLinkContractClient, Error, RequestStatus};
 
     const REWARD_HLTH: i128 = 50_000_000; // 50 HLTH tokens in stroops
 
     fn create_token(env: &Env, admin: &Address, recipient: &Address, amount: i128) -> Address {
-        // Updated to use the standard asset contract registration
         let token_id = env.register_stellar_asset_contract_v2(admin.clone());
         let token_admin = token::StellarAssetClient::new(env, &token_id.address());
         token_admin.mint(recipient, &amount);
@@ -25,7 +24,7 @@ mod tests {
         Address,   // donor
         Address,   // contract
         Address,   // hlth_token
-        BloodLinkContractClient<'static>,
+        LifeLinkContractClient<'static>,
     ) {
         let env = Env::default();
         env.mock_all_auths();
@@ -34,8 +33,8 @@ mod tests {
         let hospital = Address::generate(&env);
         let donor    = Address::generate(&env);
 
-        let contract_id = env.register(BloodLinkContract, ());
-        let client = BloodLinkContractClient::new(&env, &contract_id);
+        let contract_id = env.register(LifeLinkContract, ());
+        let client = LifeLinkContractClient::new(&env, &contract_id);
 
         // Mint HLTH supply to contract for rewards
         let hlth_token = create_token(&env, &admin, &contract_id, 10_000_000_000);
@@ -49,30 +48,38 @@ mod tests {
         (env, admin, hospital, donor, contract_id, hlth_token, client)
     }
 
+    // -----------------------------------------------------------------------
+    // Test 1 — Happy path
+    // Hospital posts request → donor responds → BHW confirms → HLTH reward paid
+    // -----------------------------------------------------------------------
     #[test]
     fn test_full_donation_flow_happy_path() {
         let (env, admin, hospital, donor, _contract_id, hlth_token, client) = setup();
 
         let deadline = env.ledger().timestamp() + 3600; // 1 hour from now
 
+        // Hospital posts emergency O+ request
         let request_id = client.post_request(
             &hospital,
             &String::from_str(&env, "O+"),
             &2u32,
             &String::from_str(&env, "14.5995,120.9842"),
             &deadline,
-        ).unwrap(); // post_request returns Result<u64, Error>
-
+        );
         assert_eq!(request_id, 1u64);
 
+        // Donor responds with a mock claimable balance ID
         let cb_id = String::from_str(&env, "claimable_balance_mock_001");
-        client.respond_to_request(&donor, &request_id, &cb_id).unwrap();
+        client.respond_to_request(&donor, &request_id, &cb_id);
 
+        // Check donor balance before confirmation
         let token_client = token::Client::new(&env, &hlth_token);
         let balance_before = token_client.balance(&donor);
 
-        client.confirm_donation(&admin, &donor, &request_id).unwrap();
+        // BHW + admin co-sign confirmation
+        client.confirm_donation(&admin, &donor, &request_id);
 
+        // Donor should have received exactly REWARD_HLTH
         let balance_after = token_client.balance(&donor);
         assert_eq!(
             balance_after - balance_before,
@@ -80,14 +87,20 @@ mod tests {
             "donor should receive exactly the HLTH reward"
         );
 
+        // Verify the response record shows confirmed = true
         let response = client.get_response(&request_id, &donor);
         assert!(response.confirmed, "response should be marked confirmed");
 
+        // Verify request still Open (only 1 of 2 units fulfilled)
         let request = client.get_request(&request_id);
         assert_eq!(request.units_fulfilled, 1u32);
         assert_eq!(request.status, RequestStatus::Open);
     }
 
+    // -----------------------------------------------------------------------
+    // Test 2 — Edge case
+    // A duplicate donor response to the same request must be rejected.
+    // -----------------------------------------------------------------------
     #[test]
     fn test_duplicate_donor_response_rejected() {
         let (env, _admin, hospital, donor, _contract_id, _hlth_token, client) = setup();
@@ -100,13 +113,14 @@ mod tests {
             &1u32,
             &String::from_str(&env, "10.3157,123.8854"),
             &deadline,
-        ).unwrap();
+        );
 
         let cb_id = String::from_str(&env, "claimable_balance_mock_002");
 
-        client.respond_to_request(&donor, &request_id, &cb_id).unwrap();
+        // First response — should succeed
+        client.respond_to_request(&donor, &request_id, &cb_id);
 
-        // Using try_ variant to check the error
+        // Second response from the same donor — must fail
         let result = client.try_respond_to_request(
             &donor,
             &request_id,
@@ -115,7 +129,7 @@ mod tests {
 
         assert!(result.is_err(), "duplicate response should return an error");
 
-        // FIXED: Renamed unwrap_optimistic to unwrap_optimized
+        // Fix: correct method name is unwrap_optimized, not unwrap_optimistic
         let contract_err = result.err().unwrap().unwrap_optimized();
         assert_eq!(
             contract_err,
@@ -124,6 +138,10 @@ mod tests {
         );
     }
 
+    // -----------------------------------------------------------------------
+    // Test 3 — State verification
+    // Storage correctly reflects request metadata and status after posting.
+    // -----------------------------------------------------------------------
     #[test]
     fn test_request_storage_state_after_posting() {
         let (env, _admin, hospital, _donor, _contract_id, _hlth_token, client) = setup();
@@ -136,7 +154,7 @@ mod tests {
             &3u32,
             &String::from_str(&env, "7.0731,125.6128"),
             &deadline,
-        ).unwrap();
+        );
 
         let stored = client.get_request(&request_id);
 
