@@ -17,7 +17,7 @@ automatically. Every match is publicly auditable on any Stellar explorer.
 |---------|-------------|
 | Testnet | `CC3MZKXYMWYY27RPVFCN3PABNAIVJ3GSIIWGO2WAQWP37QIA2FUAIJJG` |
 
-![StellarExpert](docs/stellarexpert.png)
+![StellarExpert](docs/stellarexpert.png.png)
 
 🔍 [View on StellarExpert](https://stellar.expert/explorer/testnet/contract/CC3MZKXYMWYY27RPVFCN3PABNAIVJ3GSIIWGO2WAQWP37QIA2FUAIJJG)
 
